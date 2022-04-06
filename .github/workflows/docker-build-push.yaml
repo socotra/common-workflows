@@ -21,6 +21,11 @@ on:
         required: false
         default: "socotrajenkins"
         type: string
+      push:
+        description: "Whether to push the built image "
+        required: false
+        default: true
+        type: boolean
 
     secrets:
       aws_access_key_id:
@@ -71,6 +76,7 @@ jobs:
         unique_tag="${branch_prefix}-${{ github.run_number }}-${{ github.run_attempt }}-${commit_short}"
         echo "::set-output name=unique::$unique_tag"
     - name: Tag and push container image
+      if: ${{ inputs.push == true }}
       env:
         ECR_REGISTRY: 936926373655.dkr.ecr.us-west-2.amazonaws.com
       run: |
