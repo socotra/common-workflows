@@ -1,0 +1,110 @@
+name: Reusable deployment workflow
+on:
+  workflow_call:
+    inputs:
+      # Controls where in the `socotra-release` repo to write the application
+      # manifest.
+      #
+      # Example: "frontend-v2", "loadassets2", etc.
+      app_name:
+        required: true
+        type: string
+      # Controls which overlay to use for building the manifest, and where in
+      # the `socotra-release` repo to write the rendered manifest.
+      #
+      # Example: "axa-production", "moo-production", "staging", etc.
+      environment:
+        required: true
+        type: string
+      # The generic name of the container image specified in this application's
+      # base manifests.
+      #
+      # Example: "socotra/frontend-v2", "socotra/loadassets2", etc.
+      image_name:
+        required: true
+        type: string
+      # Which container image tag to use for the above image.
+      image_tag:
+        required: true
+        type: string
+      # Which branch of the `soctora-release` repo in which to write the new
+      # manifest.
+      branch:
+        required: false
+        type: string
+        default: master
+    secrets:
+      # We need a specific token to check out the socotra-release repo, since
+      # the default ${{ secrets.GITHUB_TOKEN }} does not have the appropriate
+      # permissions.
+      our_github_token:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Checkout socotra-release
+      uses: actions/checkout@v2
+      with:
+        repository: socotra/socotra-release
+        token: ${{ secrets.our_github_token }}
+        path: /home/runner/work/loadassets2/loadassets2/socotra-release
+        ref: master
+        fetch-depth: 0
+    # TODO: make this work.
+    # Our existing GitOps flow is that `release/*` branches commit rendered
+    # K8s manifests to a separate branch, and then open a PR. This steps is
+    # intended to provide support for this, but Github gave an error with the
+    # `if:` condition.
+    #- name: Create socotra-release branch
+    #  if: inputs.branch != "master"
+    #  run: |
+    #    cd /home/runner/work/loadassets2/loadassets2/socotra-release
+    #    git checkout -b ${{ inputs.branch }}
+    - name: Setup
+      run: |
+        set -e
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get update -y
+        sudo apt-get install -y apt-transport-https ca-certificates curl
+        sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+        sudo apt-get update -y
+        sudo apt-get install -y kubectl
+
+    - name: Render manifest
+      run: |
+        set -e
+        INPUT_OVERLAY="./kustomize/overlays/${{ inputs.environment }}"
+        cat >>${INPUT_OVERLAY}/kustomization.yaml <<EOF
+        images:
+        - name: ${{ inputs.image_name }}
+          newName: 936926373655.dkr.ecr.us-west-2.amazonaws.com/${{ inputs.image_name }}
+          newTag: ${{ inputs.image_tag }}
+        EOF
+        cat ${INPUT_OVERLAY}/kustomization.yaml
+        OUTPUT_DIR="/home/runner/work/loadassets2/loadassets2/socotra-release/environments/${{ inputs.environment }}/${{ inputs.app_name }}"
+        mkdir -p ${OUTPUT_DIR}
+        kubectl kustomize ${INPUT_OVERLAY} > ${OUTPUT_DIR}/manifest.yaml
+
+    # TODO: figure out strategy for fetching and deploying secrets.
+    # There is an official set of Vault actions from Hashicorp. It would be
+    # nice to do this in a completely generic way, so that this workflow could
+    # be reused commonly among multiple services.
+
+    - name: Publish manifest
+      run: |
+        set -e
+        cd /home/runner/work/loadassets2/loadassets2/socotra-release
+        git config --global user.name "Socotra DevOps"
+        git config --global user.email devops@socotra.com
+        git add .
+        git commit -a -m "Deploy ${{ inputs.app_name }} with tag ${{ inputs.image_tag }} to ${{ inputs.environment }}."
+        while ! git push; do
+          git pull --rebase
+        done
