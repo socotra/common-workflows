@@ -70,6 +70,7 @@ jobs:
         commit_short=$(echo ${{ github.sha }} | cut -b 1-8)
         unique_tag="${branch_prefix}-${{ github.run_number }}-${{ github.run_attempt }}-${commit_short}"
         echo "::set-output name=unique::$unique_tag"
+        echo "::set-output name=sanitized_branch::$branch_prefix"
     - name: Tag and push container image
       env:
         ECR_REGISTRY: 936926373655.dkr.ecr.us-west-2.amazonaws.com
