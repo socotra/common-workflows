@@ -61,11 +61,11 @@ jobs:
     # K8s manifests to a separate branch, and then open a PR. This steps is
     # intended to provide support for this, but Github gave an error with the
     # `if:` condition.
-    #- name: Create socotra-release branch
-    #  if: inputs.branch != "master"
-    #  run: |
-    #    cd /home/runner/work/loadassets2/loadassets2/socotra-release
-    #    git checkout -b ${{ inputs.branch }}
+    - name: Create socotra-release branch
+      run: |
+        [[ "${{ inputs.branch }}" == "master" ]] && exit 0
+        cd /home/runner/work/${{ inputs.app_name }}/${{ inputs.app_name }}/socotra-release
+        git checkout ${{ inputs.branch }} || git checkout -b ${{ inputs.branch }}
     - name: Setup
       run: |
         set -e
@@ -103,6 +103,7 @@ jobs:
         cd /home/runner/work/${{ inputs.app_name }}/${{ inputs.app_name }}/socotra-release
         git config --global user.name "Socotra DevOps"
         git config --global user.email devops@socotra.com
+        git config --global push.default current
         git add .
         git commit -a -m "Deploy ${{ inputs.app_name }} with tag ${{ inputs.image_tag }} to ${{ inputs.environment }}."
         while ! git push; do
