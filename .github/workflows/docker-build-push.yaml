@@ -35,12 +35,17 @@ on:
       unique_tag:
         description: "An auto-generated container image tag that is unique for every run."
         value: ${{ jobs.main.outputs.unique_tag }}
+      sanitized_branch:
+        description: "The branch being build, but with '/' replaced with '-'."
+        value: ${{ jobs.main.outputs.sanitized_branch }}
 
 jobs:
   main:
     runs-on: ubuntu-20.04
     outputs:
       unique_tag: ${{ steps.gen-tag.outputs.unique }}
+      sanitized_branch: ${{ steps.gen-tag.outputs.sanitized_branch }}
+
     steps:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
