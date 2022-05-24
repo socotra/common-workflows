@@ -12,7 +12,12 @@ on:
       # Controls which overlay to use for building the manifest, and where in
       # the `socotra-release` repo to write the rendered manifest.
       #
-      # Example: "axa-production", "moo-production", "staging", etc.
+      # This can be a space-separated list of multiple environments.
+      #
+      # Examples:
+      #   * "develop"
+      #   * "staging"
+      #   * "axa-production moo-production toni-production ..."
       environment:
         required: true
         type: string
@@ -56,11 +61,6 @@ jobs:
         path: /home/runner/work/${{ inputs.app_name }}/${{ inputs.app_name }}/socotra-release
         ref: master
         fetch-depth: 0
-    # TODO: make this work.
-    # Our existing GitOps flow is that `release/*` branches commit rendered
-    # K8s manifests to a separate branch, and then open a PR. This steps is
-    # intended to provide support for this, but Github gave an error with the
-    # `if:` condition.
     - name: Create socotra-release branch
       run: |
         [[ "${{ inputs.branch }}" == "master" ]] && exit 0
@@ -76,36 +76,55 @@ jobs:
         echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
         sudo apt-get update -y
         sudo apt-get install -y kubectl
-
-    - name: Render manifest
+    - name: Render manifest(s)
       run: |
-        set -e
-        INPUT_OVERLAY="./kustomize/overlays/${{ inputs.environment }}"
-        cat >>${INPUT_OVERLAY}/kustomization.yaml <<EOF
+        set -ex
+        i=0
+        # render manifests for all envs concurrently
+        for env in ${{ inputs.environment }}; do
+          INPUT_OVERLAY="./kustomize/overlays/${env}"
+          cat >>${INPUT_OVERLAY}/kustomization.yaml <<EOF
         images:
         - name: ${{ inputs.image_name }}
           newName: 936926373655.dkr.ecr.us-west-2.amazonaws.com/${{ inputs.image_name }}
           newTag: ${{ inputs.image_tag }}
         EOF
-        cat ${INPUT_OVERLAY}/kustomization.yaml
-        OUTPUT_DIR="/home/runner/work/${{ inputs.app_name }}/${{ inputs.app_name }}/socotra-release/environments/${{ inputs.environment }}/${{ inputs.app_name }}"
-        mkdir -p ${OUTPUT_DIR}
-        kubectl kustomize ${INPUT_OVERLAY} > ${OUTPUT_DIR}/manifest.yaml
+          OUTPUT_DIR="/home/runner/work/${{ inputs.app_name }}/${{ inputs.app_name }}/socotra-release/environments/${env}/${{ inputs.app_name }}"
+          ERRORS_DIR="/home/runner/work/errors/${env}"
+          mkdir -p ${OUTPUT_DIR} ${ERRORS_DIR}
+          kubectl kustomize ${INPUT_OVERLAY} \
+            > ${OUTPUT_DIR}/manifest.yaml \
+            2> ${ERRORS_DIR}/errors.log \
+            &
+          pids[${i}]=$!
+          envs[${i}]=${env}
+          let "i+=1"
+        done
+        # check exit codes for each render job
+        FAILED=0
+        for job in "${!pids[@]}"; do
+          if ! wait "${pids[$job]}"; then
+            FAILED=1
+            echo "ERROR: failed to render for env ${envs[$job]}"
+            cat /home/runner/work/errors/${envs[$job]}/errors.log
+            echo
+          fi
+        done
+        exit ${FAILED}
 
     # TODO: figure out strategy for fetching and deploying secrets.
     # There is an official set of Vault actions from Hashicorp. It would be
     # nice to do this in a completely generic way, so that this workflow could
     # be reused commonly among multiple services.
-
     - name: Publish manifest
       run: |
-        set -e
+        set -ex
         cd /home/runner/work/${{ inputs.app_name }}/${{ inputs.app_name }}/socotra-release
         git config --global user.name "Socotra DevOps"
         git config --global user.email devops@socotra.com
         git config --global push.default current
         git add .
-        git commit -a -m "Deploy ${{ inputs.app_name }} with tag ${{ inputs.image_tag }} to ${{ inputs.environment }}."
+        git commit -a -m "Deploy ${{ inputs.app_name }} with tag ${{ inputs.image_tag }}."
         while ! git push; do
           git pull --rebase
         done
