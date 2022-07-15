@@ -61,6 +61,8 @@ jobs:
       with:
         fetch-depth: 0
     - name: Build container image
+      env:
+        DOCKER_BUILDKIT: 1
       run: |
         docker build \
           -t ${{ inputs.ecr_repository }}:${{ github.sha }} \
