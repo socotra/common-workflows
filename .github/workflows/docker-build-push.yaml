@@ -16,6 +16,11 @@ on:
         required: false
         default: ""
         type: string
+      dockerfile_name:
+        description: "Dockefile to use"
+        required: false
+        default: "Dockerfile"
+        type: string
       github_user:
         description: "Github username, for downloading private dependencies"
         required: false
@@ -68,7 +73,7 @@ jobs:
           -t ${{ inputs.ecr_repository }}:${{ github.sha }} \
           --build-arg GITHUB_USER=${{ inputs.github_user }} \
           --build-arg GITHUB_APITOKEN=${{ secrets.our_github_token }} \
-          .
+          -f ${{ inputs.dockerfile_name }} .
     - name: Generate unique tag
       id: gen-tag
       run: |
