@@ -104,10 +104,14 @@ jobs:
           INPUT_OVERLAY="./kustomize/overlays/${env}"
           cat >>${INPUT_OVERLAY}/kustomization.yaml <<EOF
         images:
-        - name: ${{ inputs.image_name }}
-          newName: 936926373655.dkr.ecr.us-west-2.amazonaws.com/${{ inputs.image_name }}
+        EOF
+          for image in ${{ inputs.image_name }}; do
+            cat >>${INPUT_OVERLAY}/kustomization.yaml <<EOF
+        - name: ${image}
+          newName: 936926373655.dkr.ecr.us-west-2.amazonaws.com/${image}
           newTag: ${{ inputs.image_tag }}
         EOF
+          done
           OUTPUT_DIR="/home/runner/work/${{ inputs.app_name }}/${{ inputs.app_name }}/socotra-release/environments/${env}/${{ inputs.app_name }}"
           ERRORS_DIR="/home/runner/work/errors/${env}"
           mkdir -p ${OUTPUT_DIR} ${ERRORS_DIR}
