@@ -26,6 +26,11 @@ on:
         required: false
         default: "socotrajenkins"
         type: string
+      arch:
+        description: "A space-separated list of architectures for which to build images."
+        required: false
+        default: "X64"
+        type: string
 
     secrets:
       aws_access_key_id:
@@ -45,12 +50,24 @@ on:
         value: ${{ jobs.main.outputs.sanitized_branch }}
 
 jobs:
+  setup:
+    runs-on: [self-hosted, linux, X64]
+    outputs:
+      arches: ${{ fromJSON(steps.arches.outputs) }}
+    steps:
+    - uses: jungwinter/split@v2
+      id: arches
+      with:
+        msg: ${{ inputs.arch }}
   main:
-    runs-on: ubuntu-20.04
+    needs: setup
+    strategy:
+      matrix:
+        arch: ${{ jobs.setup.outputs.arches.outputs }}
+    runs-on: [self-hosted, linux, ${{ matrix.arch }}]
     outputs:
       unique_tag: ${{ steps.gen-tag.outputs.unique }}
       sanitized_branch: ${{ steps.gen-tag.outputs.sanitized_branch }}
-
     steps:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
@@ -81,13 +98,14 @@ jobs:
         branch_prefix=$(echo ${{ github.ref_name }} | sed 's/\//-/g')
         commit_short=$(echo ${{ github.sha }} | cut -b 1-8)
         unique_tag="${branch_prefix}-${{ github.run_number }}-${{ github.run_attempt }}-${commit_short}"
-        echo "::set-output name=unique::$unique_tag"
-        echo "::set-output name=sanitized_branch::$branch_prefix"
+        echo "unique=$unique_tag" >>$GITHUB_OUTPUT
+        echo "sanitized_branch=$branch_prefix" >>$GITHUB_OUTPUT
     - name: Tag and push container image
       env:
         ECR_REGISTRY: 936926373655.dkr.ecr.us-west-2.amazonaws.com
       run: |
         for tag in ${{ steps.gen-tag.outputs.unique }} ${{ inputs.image_tags }}; do
-          docker tag ${{ inputs.ecr_repository }}:${{ github.sha }} ${ECR_REGISTRY}/${{ inputs.ecr_repository }}:$tag
-          docker push ${ECR_REGISTRY}/${{ inputs.ecr_repository }}:$tag
+          tag_arch="${tag}-${{ matrix.arch }}"
+          docker tag ${{ inputs.ecr_repository }}:${{ github.sha }} ${ECR_REGISTRY}/${{ inputs.ecr_repository }}:$tag_arch
+          docker push ${ECR_REGISTRY}/${{ inputs.ecr_repository }}:$tag_arch
         done
