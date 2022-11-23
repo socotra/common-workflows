@@ -71,7 +71,7 @@ jobs:
       with:
         fetch-depth: 0
     - name: Download an artifact
-      if: ${{ inputs.artifact_name != "" }}
+      if: ${{ inputs.artifact_name != '' }}
       uses: actions/download-artifact@v3
       with:
         name: ${{ inputs.artifact_name }}
