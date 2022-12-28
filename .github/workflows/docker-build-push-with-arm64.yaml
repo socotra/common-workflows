@@ -78,13 +78,16 @@ jobs:
       with:
         name: ${{ inputs.artifact_name }}
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2        
+      uses: docker/setup-buildx-action@v2
+    - name: Setup PLATFORM_SUFFIX
+      run: |
+        echo "PLATFORM_SUFFIX=$([ ${{ matrix.platform }} == arm64 ] && echo '-arm64' || echo '')" >> $GITHUB_ENV
     - name: Build container image
       env:
         DOCKER_BUILDKIT: 1
       run: |
         docker buildx build \
-          --load -t ${{ inputs.ecr_repository }}:${{ github.sha }}-${{ matrix.platform }} \
+          --load -t ${{ inputs.ecr_repository }}:${{ github.sha }}${PLATFORM_SUFFIX} \
           --build-arg GITHUB_USER=${{ inputs.github_user }} \
           --build-arg GITHUB_APITOKEN=${{ secrets.our_github_token }} \
           --build-arg TARGETARCH=${{ matrix.platform }} --platform linux/${{ matrix.platform }} \
@@ -103,6 +106,6 @@ jobs:
         ECR_REGISTRY: 936926373655.dkr.ecr.us-west-2.amazonaws.com
       run: |
         for tag in ${{ steps.gen-tag.outputs.unique }} ${{ inputs.image_tags }}; do
-          docker tag ${{ inputs.ecr_repository }}:${{ github.sha }}-${{ matrix.platform }} ${ECR_REGISTRY}/${{ inputs.ecr_repository }}:$tag-${{ matrix.platform }}
-          docker push ${ECR_REGISTRY}/${{ inputs.ecr_repository }}:$tag-${{ matrix.platform }}
+          docker tag ${{ inputs.ecr_repository }}:${{ github.sha }}${PLATFORM_SUFFIX} ${ECR_REGISTRY}/${{ inputs.ecr_repository }}:$tag${PLATFORM_SUFFIX}
+          docker push ${ECR_REGISTRY}/${{ inputs.ecr_repository }}:$tag${PLATFORM_SUFFIX}
         done
