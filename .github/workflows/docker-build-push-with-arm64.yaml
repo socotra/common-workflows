@@ -1,0 +1,111 @@
+name: Build and push a container image
+on:
+  workflow_call:
+    inputs:
+      ecr_repository:
+        description: "The container registry to which the built image will be pushed."
+        required: true
+        type: string
+      ecr_region:
+        description: "AWS region in which the container registry is kept."
+        required: false
+        default: "us-west-2"
+        type: string
+      image_tags:
+        description: "A space-separated list of additional container image tags to apply."
+        required: false
+        default: ""
+        type: string
+      dockerfile_name:
+        description: "Dockefile to use"
+        required: false
+        default: "Dockerfile"
+        type: string
+      artifact_name:
+        description: "An uploaded artifact by previous job"
+        required: false
+        default: ""
+        type: string
+      github_user:
+        description: "Github username, for downloading private dependencies"
+        required: false
+        default: "socotrajenkins"
+        type: string
+
+    secrets:
+      aws_access_key_id:
+        description: "The AWS access key ID for authenticating to the ECR."
+        required: true
+      aws_secret_access_key:
+        description: "The AWS secret access key for authenticating to the ECR."
+        required: true
+      our_github_token:
+        description: "Github API token, for downloading private dependencies"
+    outputs:
+      unique_tag:
+        description: "An auto-generated container image tag that is unique for every run."
+        value: ${{ jobs.main.outputs.unique_tag }}
+      sanitized_branch:
+        description: "The branch being build, but with '/' replaced with '-'."
+        value: ${{ jobs.main.outputs.sanitized_branch }}
+
+jobs:
+  main:
+    runs-on: ubuntu-20.04
+    outputs:
+      unique_tag: ${{ steps.gen-tag.outputs.unique }}
+      sanitized_branch: ${{ steps.gen-tag.outputs.sanitized_branch }}
+    strategy:
+      matrix:
+        platform: [amd64, arm64]
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.aws_access_key_id }}
+        aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+        aws-region: ${{ inputs.ecr_region }}
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Download an artifact
+      if: ${{ inputs.artifact_name != '' }}
+      uses: actions/download-artifact@v3
+      with:
+        name: ${{ inputs.artifact_name }}
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    - name: Setup PLATFORM_SUFFIX
+      run: |
+        echo "PLATFORM_SUFFIX=$([ ${{ matrix.platform }} == arm64 ] && echo '-arm64' || echo '')" >> $GITHUB_ENV
+    - name: Build container image
+      env:
+        DOCKER_BUILDKIT: 1
+      run: |
+        docker buildx build \
+          --load -t ${{ inputs.ecr_repository }}:${{ github.sha }}${PLATFORM_SUFFIX} \
+          --build-arg GITHUB_USER=${{ inputs.github_user }} \
+          --build-arg GITHUB_APITOKEN=${{ secrets.our_github_token }} \
+          --build-arg TARGETARCH=${{ matrix.platform }} --platform linux/${{ matrix.platform }} \
+          -f ${{ inputs.dockerfile_name }} .
+    - name: Generate unique tag
+      id: gen-tag
+      run: |
+        echo '::echo::on'
+        branch_prefix=$(echo ${{ github.ref_name }} | sed 's/\//-/g')
+        commit_short=$(echo ${{ github.sha }} | cut -b 1-8)
+        unique_tag="${branch_prefix}-${{ github.run_number }}-${{ github.run_attempt }}-${commit_short}"
+        echo "::set-output name=unique::$unique_tag"
+        echo "::set-output name=sanitized_branch::$branch_prefix"
+    - name: Tag and push container image
+      env:
+        ECR_REGISTRY: 936926373655.dkr.ecr.us-west-2.amazonaws.com
+      run: |
+        for tag in ${{ steps.gen-tag.outputs.unique }} ${{ inputs.image_tags }}; do
+          docker tag ${{ inputs.ecr_repository }}:${{ github.sha }}${PLATFORM_SUFFIX} ${ECR_REGISTRY}/${{ inputs.ecr_repository }}:$tag${PLATFORM_SUFFIX}
+          docker push ${ECR_REGISTRY}/${{ inputs.ecr_repository }}:$tag${PLATFORM_SUFFIX}
+        done
