@@ -49,33 +49,33 @@ jobs:
       with:
         repository: socotra/${{ matrix.repo }}
         token: ${{ secrets.our_github_token }}
-        path: /home/runner/work/repos/${{ matrix.repo }}
+        path: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
         ref: develop
         fetch-depth: 0
     - name: Update library version in settings.gradle.kts
-      working-directory: /home/runner/work/repos/${{ matrix.repo }}
+      working-directory: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
       run: |
         set -ex
         sed -E -i \
-          's/(\s+)val ${{ inputs.lib_var }} = \".*\"/\1val ${{ inputs.lib_var }}= \"${{ inputs.lib_version }}\"/' \
+          's/(\s+)val ${{ inputs.lib_var }} = \".*\"/\1val ${{ inputs.lib_var }} = \"${{ inputs.lib_version }}\"/' \
           settings.gradle.kts
     - name: Stage updates
-      working-directory: /home/runner/work/repos/${{ matrix.repo }}
+      id: stage
+      continue-on-error: true
+      working-directory: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
       run: |
         git add .
-        # if nothing changed, then cancel this
+        # if nothing changed, then skip next step
         if [[ ! -n $(git status --porcelain --untracked-files=no) ]]; then
-          gh run cancel ${{ github.run_id }}
-          gh run watch ${{ github.run_id }}
+          exit 1
         fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.our_github_token }}
     - name: Create Pull Request
+      if: steps.stage.conclusion == 'success'
       uses: peter-evans/create-pull-request@v4
       with:
-        path: /home/runner/work/repos/${{ matrix.repo }}
+        path: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
         token: ${{ secrets.our_github_token }}
-        branch: update-${{ inputs.lib_name }}-${{ inputs.lib_version }}
+        branch: feature/update-${{ inputs.lib_name }}-${{ inputs.lib_version }}
         delete-branch: true
         base: develop
         title: "Update dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}"
