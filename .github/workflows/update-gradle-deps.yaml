@@ -76,6 +76,7 @@ jobs:
         branch: feature/update-${{ inputs.lib_name }}-${{ inputs.lib_version }}
         delete-branch: true
         base: develop
+        reviewers: ${{ github.actor }}
         title: "Update dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}"
         commit-message: |
           Update dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}
