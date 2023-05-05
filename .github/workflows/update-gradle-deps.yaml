@@ -1,0 +1,82 @@
+name: Update Gradle repos with latest library version.
+on:
+  workflow_call:
+    inputs:
+      lib_name:
+        type: string
+        required: true
+        description: |
+          Name of the library repository.
+
+          For example, "platform-common".
+      lib_var:
+        type: string
+        required: true
+        description: |
+          Name of the variable in settings.gradle.kts for library version.
+
+          For example, if the settings.gradle.kts file has this line,
+
+            val socotraCommon = "0.8.2"
+
+          then the value for lib_var should be "socotraCommon".
+      lib_version:
+        type: string
+        required: true
+        description: |
+          New version of the library.
+
+          For example, this might be "0.8.3" or "0.9.0".
+      repos:
+          type: string
+          required: true
+          description:
+            JSON list of the repositories to check for dependency updates.
+    secrets:
+      our_github_token:
+        description: "Github API token, for checking out private repos."
+jobs:
+  main:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        repo: ${{ fromJSON(inputs.repos) }}
+    steps:
+    - name: Checkout service repo
+      uses: actions/checkout@v3
+      with:
+        repository: socotra/${{ matrix.repo }}
+        token: ${{ secrets.our_github_token }}
+        path: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
+        ref: develop
+        fetch-depth: 0
+    - name: Update library version in settings.gradle.kts
+      working-directory: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
+      run: |
+        set -ex
+        sed -E -i \
+          's/(\s+)val ${{ inputs.lib_var }} = \".*\"/\1val ${{ inputs.lib_var }} = \"${{ inputs.lib_version }}\"/' \
+          settings.gradle.kts
+    - name: Stage updates
+      id: stage
+      continue-on-error: true
+      working-directory: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
+      run: |
+        git add .
+        # if nothing changed, then skip next step
+        if [[ ! -n $(git status --porcelain --untracked-files=no) ]]; then
+          exit 1
+        fi
+    - name: Create Pull Request
+      if: steps.stage.conclusion == 'success'
+      uses: peter-evans/create-pull-request@v4
+      with:
+        path: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
+        token: ${{ secrets.our_github_token }}
+        branch: feature/update-${{ inputs.lib_name }}-${{ inputs.lib_version }}
+        delete-branch: true
+        base: develop
+        title: "Update dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}"
+        commit-message: |
+          Update dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}
+        author: "Socotra DevOps <devops@socotra.com>"
