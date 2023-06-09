@@ -55,7 +55,7 @@ jobs:
       run: |
         set -ex
         sed -E -i \
-          's/(\s+)val ${{ inputs.lib_var }} = \".*\"/\1val ${{ inputs.lib_var }} = \"${{ inputs.lib_version }}\"/' \
+          's/(^\s*val ${{ inputs.lib_var }}\s*=\s*)\".*\"/\1\"${{ inputs.lib_version }}\"/' \
           settings.gradle.kts
     - name: Stage updates
       id: stage
