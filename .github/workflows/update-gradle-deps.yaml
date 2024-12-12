@@ -32,6 +32,14 @@ on:
           required: true
           description:
             JSON list of the repositories to check for dependency updates.
+      is_hotfix:
+          type: boolean
+          required: true
+          default: false
+          description: |
+            For rare event of hotfix to production, make hotfix branches instead of feature branches.
+
+            Be sure to use lib_version with point value e.g. "1.6.114.1" to distinguish it from release. 
     secrets:
       our_github_token:
         description: "Github API token, for checking out private repos."
@@ -67,8 +75,8 @@ jobs:
         if [[ ! -n $(git status --porcelain --untracked-files=no) ]]; then
           exit 1
         fi
-    - name: Create Pull Request
-      if: steps.stage.conclusion == 'success'
+    - name: Create Feature Pull Requests
+      if: ${{ (steps.stage.conclusion == 'success') && (inputs.is_hotfix == false) }}
       uses: peter-evans/create-pull-request@v4
       with:
         path: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
@@ -80,4 +88,18 @@ jobs:
         title: "Update dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}"
         commit-message: |
           Update dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}
+        author: "Socotra DevOps <devops@socotra.com>"
+    - name: Create Hotfix Pull Requests
+      if: ${{ (steps.stage.conclusion == 'success') && (inputs.is_hotfix == true) }}
+      uses: peter-evans/create-pull-request@v4
+      with:
+        path: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
+        token: ${{ secrets.our_github_token }}
+        branch: hotfix/update-${{ inputs.lib_name }}-${{ inputs.lib_version }}
+        delete-branch: true
+        base: master
+        reviewers: ${{ github.actor }}
+        title: "Hotfix dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}"
+        commit-message: |
+          Hotfix dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}
         author: "Socotra DevOps <devops@socotra.com>"
