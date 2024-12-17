@@ -34,7 +34,7 @@ on:
             JSON list of the repositories to check for dependency updates.
       is_hotfix:
           type: boolean
-          required: true
+          required: false
           default: false
           description: |
             For rare event of hotfix to production, make hotfix branches instead of feature branches.
