@@ -39,7 +39,7 @@ on:
           description: |
             For rare event of hotfix to production, make hotfix branches instead of feature branches.
 
-            Be sure to use lib_version with point value e.g. "1.6.114.1" to distinguish it from release. 
+            Be sure to use lib_version with point value e.g. "1.6.114.1" to distinguish it from release.
     secrets:
       our_github_token:
         description: "Github API token, for checking out private repos."
@@ -92,11 +92,21 @@ jobs:
         author: "Socotra DevOps <devops@socotra.com>"
     - name: Enable auto-merge for feature branch
       if: ${{ (steps.stage.conclusion == 'success') && (inputs.is_hotfix == false) }}
-      uses: peter-evans/enable-pull-request-automerge@v3
-      with:
-        token: ${{ secrets.our_github_token }}
-        repository: socotra/${{ matrix.repo }}
-        pull-request-number: ${{ steps.cfpr.outputs.pull-request-number }}
+      working-directory: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
+      run: |
+        gh pr merge \
+          "feature/update-${{ inputs.lib_name }}-${{ inputs.lib_version }}" \
+          -R "socotra/${{ matrix.repo }}" \
+          -b "Merge: Update dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}" \
+          -A "Socotra DevOps <devops@socotra.com>" \
+          --merge --auto --admin
+      env:
+        GITHUB_TOKEN: "${{ secrets.our_github_token }}"
+      #uses: peter-evans/enable-pull-request-automerge@v3
+      #with:
+      #  token: ${{ secrets.our_github_token }}
+      #  repository: socotra/${{ matrix.repo }}
+      #  pull-request-number: ${{ steps.cfpr.outputs.pull-request-number }}
     - name: Create Hotfix Pull Request
       if: ${{ (steps.stage.conclusion == 'success') && (inputs.is_hotfix == true) }}
       uses: peter-evans/create-pull-request@v4
