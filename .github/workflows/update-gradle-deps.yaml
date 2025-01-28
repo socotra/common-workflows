@@ -77,6 +77,7 @@ jobs:
         fi
     - name: Create Feature Pull Requests
       if: ${{ (steps.stage.conclusion == 'success') && (inputs.is_hotfix == false) }}
+      id: cfpr
       uses: peter-evans/create-pull-request@v4
       with:
         path: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
@@ -89,7 +90,14 @@ jobs:
         commit-message: |
           Update dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}
         author: "Socotra DevOps <devops@socotra.com>"
-    - name: Create Hotfix Pull Requests
+    - name: Enable auto-merge for feature branch
+      if: ${{ (steps.stage.conclusion == 'success') && (inputs.is_hotfix == false) }}
+      uses: peter-evans/enable-pull-request-automerge@v3
+      with:
+        token: ${{ secrets.our_github_token }}
+        repository: socotra/${{ matrix.repo }}
+        pull-request-number: ${{ steps.cfpr.outputs.pull-request-number }}
+    - name: Create Hotfix Pull Request
       if: ${{ (steps.stage.conclusion == 'success') && (inputs.is_hotfix == true) }}
       uses: peter-evans/create-pull-request@v4
       with:
