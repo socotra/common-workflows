@@ -94,6 +94,9 @@ jobs:
       if: ${{ (steps.stage.conclusion == 'success') && (inputs.is_hotfix == false) }}
       working-directory: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
       run: |
+        if [[ -z "${{ steps.cfpr.outputs.pull-request-number }}" ]]; then
+          exit 0
+        fi
         gh pr merge \
           "feature/update-${{ inputs.lib_name }}-${{ inputs.lib_version }}" \
           -R "socotra/${{ matrix.repo }}" \
