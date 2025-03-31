@@ -112,7 +112,7 @@ jobs:
     #  #  pull-request-number: ${{ steps.cfpr.outputs.pull-request-number }}
     - name: Create Hotfix Pull Request
       if: ${{ (steps.stage.conclusion == 'success') && (inputs.is_hotfix == true) }}
-      uses: peter-evans/create-pull-request@v4
+      uses: peter-evans/create-pull-request@v7.0.8
       with:
         path: /home/runner/work/${{ inputs.lib_name }}/${{ inputs.lib_name }}/repos/${{ matrix.repo }}
         token: ${{ secrets.our_github_token }}
