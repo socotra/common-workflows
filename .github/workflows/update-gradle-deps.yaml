@@ -45,7 +45,7 @@ on:
         description: "Github API token, for checking out private repos."
 jobs:
   main:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         repo: ${{ fromJSON(inputs.repos) }}
