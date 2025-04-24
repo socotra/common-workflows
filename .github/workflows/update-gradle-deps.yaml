@@ -40,6 +40,12 @@ on:
             For rare event of hotfix to production, make hotfix branches instead of feature branches.
 
             Be sure to use lib_version with point value e.g. "1.6.114.1" to distinguish it from release.
+      hotfix_target:
+          type: string
+          required: false
+          default: "master"
+          description: |
+            The Base Branch for the hotfix PR. "master" if release is out or "release/{number}" if it went to staging.
     secrets:
       our_github_token:
         description: "Github API token, for checking out private repos."
@@ -118,7 +124,7 @@ jobs:
         token: ${{ secrets.our_github_token }}
         branch: hotfix/update-${{ inputs.lib_name }}-${{ inputs.lib_version }}
         delete-branch: true
-        base: master
+        base: ${{ inputs.hotfix_target }}
         reviewers: ${{ github.actor }}
         title: "Hotfix dependency ${{ inputs.lib_name}} to version ${{ inputs.lib_version}}"
         commit-message: |
