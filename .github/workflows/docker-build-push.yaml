@@ -67,7 +67,7 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0
     - name: Download an artifact
@@ -91,8 +91,8 @@ jobs:
         branch_prefix=$(echo ${{ github.ref_name }} | sed 's/\//-/g')
         commit_short=$(echo ${{ github.sha }} | cut -b 1-8)
         unique_tag="${branch_prefix}-${{ github.run_number }}-${{ github.run_attempt }}-${commit_short}"
-        echo "::set-output name=unique::$unique_tag"
-        echo "::set-output name=sanitized_branch::$branch_prefix"
+        echo "unique=$unique_tag" >> "$GITHUB_OUTPUT"
+        echo "sanitized_branch=$branch_prefix" >> "$GITHUB_OUTPUT"
     - name: Tag and push container image
       env:
         ECR_REGISTRY: 936926373655.dkr.ecr.us-west-2.amazonaws.com
